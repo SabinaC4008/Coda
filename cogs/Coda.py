@@ -5,6 +5,7 @@ from google.adk.sessions import InMemorySessionService
 from google.adk.runners import Runner
 from google.genai import types
 import json
+import random
 import sqlite3
 import datetime
 
@@ -78,26 +79,45 @@ class Coda(commands.Cog):
     # enviar ejercicio a user
 
     # TODO: Fetch question and options from Coda
-    question = """___ square(number):
-  return number * number
+    question_bank = ["""___ square(number):
+                        return number * number
 
-result = square(5)
-print(result)"""
-    ans_options = {
-        "1️⃣": "fun",
-        "2️⃣": "def",
-        "3️⃣": "func",
-        "4️⃣": "function"
+                        result = square(5)
+                        print(result)""", 
+                        
+                        """ if x < 5:
+                              print("less than")
+                            ___ x < 5:
+                              print("greater than")
+                            else:
+                              print("error")""",
+                        
+                        """when creating an attribute for a python classes, 
+                        they should all start with"""]
+    answer_choices = [["function", "fun", "def", "func"], 
+    ["elif", "else if", "if else", "or"], 
+    ["classname.", "own.", "Class.", "self."]] 
+    answer_key = ["def", "elif", "self."]
+
+    new_question = random.randint(0,2) # this is only a demo set of questions. ideally
+    # the question set would be much larger to prevent repeats.
+    question = question_bank[new_question]
+    ans_options = answer_choices[new_question]
+    correct_answer = answer_key[new_question]
+
+    emoji = {
+        "1️⃣": 0,
+        "2️⃣": 1,
+        "3️⃣": 2,
+        "4️⃣": 3
     }
-    correct_answer = "def"
-
     embed = discord.Embed(
       title="Coda Agent Response",
       description=f"""{question}\n\n
-      1️⃣ {ans_options['1️⃣']}
-      2️⃣ {ans_options['2️⃣']}
-      3️⃣ {ans_options['3️⃣']}
-      4️⃣ {ans_options['4️⃣']}
+      1️⃣ {ans_options[0]}
+      2️⃣ {ans_options[1]}
+      3️⃣ {ans_options[2]}
+      4️⃣ {ans_options[3]}
       \n\n*Please react with the corresponding emoji to select your answer.*""",
       color=self.COLOR
     )
@@ -117,7 +137,7 @@ print(result)"""
         try:
             reaction, user = await self.CLIENT.wait_for("reaction_add", timeout=20.0, check=check)
 
-            answer = ans_options[str(reaction.emoji)]
+            answer = ans_options[emoji[str(reaction.emoji)]]
             await message.clear_reactions()
             break
 
@@ -125,7 +145,6 @@ print(result)"""
           await message.clear_reactions()
           # TODO: You took too long
           break
-
 
     # mandar a coda
     query = f"""
