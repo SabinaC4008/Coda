@@ -174,3 +174,59 @@ print(result)"""
           i += 1
 
       await ctx.send(embed=embed)
+
+  @commands.command(name="fill", aliases=["f"], help="Answer a fill-in-the-blank question.")
+  async def fill(self, ctx):
+
+        question = "___ is the keyword used to define a function in Python."
+        correct_answer = "def"
+
+        embed = discord.Embed(
+            title="coda Agent: Fill in the Blank!",
+            description=f"**Question:**\n`{question}`\n\nType your one-word answer in the chat. You have 20 seconds!",
+            color=self.COLOR
+        )
+        message = await ctx.send(embed=embed)
+
+        # esperar rpta
+        while True:
+            def check(message):
+                return message.author == ctx.author and message.channel == ctx.channel
+            try:
+                user_message = await self.CLIENT.wait_for("message", timeout=20.0, check=check)
+                user_answer = user_message.content.strip().lower()
+                break
+
+            except:
+              # TODO: You took too long
+              break
+
+        # mandar a coda
+        query = f"""
+            exercise_type: 'fill_in_the_blank'
+            user_answer: {user_answer}
+            correct_answer_data: {correct_answer}"""
+
+        res = await self.call_agent_async(query=query,
+                                runner=self.runner,
+                                user_id=self.USER_ID,
+                                session_id=self.SESSION_ID)
+        print(res)
+        print(type(res))
+        python_dict = json.loads(res)
+
+
+        self.cursor.execute(
+          "INSERT INTO questions (user, date, score, language, server) VALUES (?, ?, ?, ?, ?)",
+          (str(ctx.author.display_name), datetime.datetime.now(), python_dict.get('score', 0), 'Python', str(ctx.guild.id))
+        )
+
+        self.conexion.commit()
+
+        embed = discord.Embed(
+            title="Coda Agent Response",
+            description=f"""Score: {python_dict.get('score', 'N/A')}\n
+            Feedback: {python_dict.get('feedback', 'No feedback provided.')}""",
+            color=self.COLOR
+        )
+        await message.edit(embed=embed)
