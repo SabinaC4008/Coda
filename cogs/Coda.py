@@ -5,13 +5,35 @@ from google.adk.sessions import InMemorySessionService
 from google.adk.runners import Runner
 from google.genai import types
 import json
+import sqlite3
+import datetime
 
 class Coda(commands.Cog):
   """Commands for studying using AI agents."""
 
+  def __del__(self):
+    self.conexion.close()
+
   def __init__(self, client):
+
+    self.conexion = sqlite3.connect('game.db')
+    self.cursor = self.conexion.cursor()
+
+    self.cursor.execute('''
+        CREATE TABLE IF NOT EXISTS questions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user TEXT NOT NULL,
+            date DATETIME NOT NULL,
+            score INTEGER NOT NULL,
+            language TEXT NOT NULL,
+            server TEXT NOT NULL
+        )
+    ''')
+
+    self.conexion.commit()
+
     self.CLIENT = client
-    self.COLOR = 0xcb1aee
+    self.COLOR = 0xC1FF72
 
     session_service = InMemorySessionService()
 
@@ -119,6 +141,14 @@ print(result)"""
     print(type(res))
     python_dict = json.loads(res)
 
+
+    self.cursor.execute(
+       "INSERT INTO questions (user, date, score, language, server) VALUES (?, ?, ?, ?, ?)",
+       (str(ctx.author.display_name), datetime.datetime.now(), python_dict.get('score', 0), 'Python', str(ctx.guild.id))
+    )
+
+    self.conexion.commit()
+
     embed = discord.Embed(
         title="Coda Agent Response",
         description=f"""Score: {python_dict.get('score', 'N/A')}\n
@@ -126,3 +156,21 @@ print(result)"""
         color=self.COLOR
     )
     await message.edit(embed=embed)
+
+  @commands.command(name="leaderboard", aliases=["lead", "l"], help="Show the leaderboard.")
+  async def leaderboard(self, ctx):
+      self.cursor.execute("SELECT user, sum(score) FROM questions GROUP BY user ORDER BY sum(score) DESC LIMIT 10")
+      rows = self.cursor.fetchall()
+
+      embed = discord.Embed(
+          title="Leaderboard",
+          description="Top 10 users:",
+          color=self.COLOR
+      )
+
+      i = 1
+      for fila in rows:
+          embed.add_field(name=f"{i}. {fila[0]}", value=fila[1], inline=False)
+          i += 1
+
+      await ctx.send(embed=embed)

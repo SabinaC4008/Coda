@@ -28,6 +28,7 @@ def return_instructions() -> str:
 
     4. Return the Result:
         * Transmit the complete result object (the score and feedback message) back to the web page to be displayed to the user. Your task is complete once the result has been returned.
+        The result object should be structured as a string in the following format: {"score": <numeric_score>,"feedback": <string_feedback>}
     """
 
     return instructions
