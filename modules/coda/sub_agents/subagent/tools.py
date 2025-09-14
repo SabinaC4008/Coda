@@ -1,74 +1,81 @@
-from RestrictedPython import compile_restricted, safe_globals
-import traceback
+import sys
+from io import StringIO
+
 def evaluate_code(user_code: str, test_cases_data: dict):
-    """
-    Evaluates user's Python code against a set of test cases using a sandbox.
+    results = []
 
-    Args:
-        user_code: The Python code submitted by the user as a string.
-        test_cases_data: A dictionary containing the function name and test cases.
-                         Example: {"function_name": "add", "test_cases": [{"input": [1, 2], "output": 3}]}
-
-    Returns:
-        A dictionary containing the final 'score' and detailed 'feedback'.
-    """
-    # --- SECURITY NOTE ---
-    # This implementation now uses RestrictedPython to create a safer execution
-    # environment. It prevents access to most dangerous built-ins. However, for a
-    # true production system, running code in a fully isolated container (e.g., Docker)
-    # is the recommended best practice for maximum security.
-
-    passed_tests = 0
-    feedback_details = []
+    execution_scope = {}
 
     try:
-        # Validate the input data structure
-        if "test_cases" not in test_cases_data or "function_name" not in test_cases_data:
-            return {"score": 0, "feedback": "Evaluation error: The 'test_cases_data' must include 'function_name' and 'test_cases'."}
-
-        test_cases = test_cases_data["test_cases"]
-        function_name = test_cases_data["function_name"]
-        total_tests = len(test_cases)
-
-        if total_tests == 0:
-            return {"score": 100, "feedback": "No test cases were provided, so the submission is considered trivially correct."}
-
-        # Compile the user's code in a restricted environment
-        byte_code = compile_restricted(user_code, '<string>', 'exec')
-
-        # Prepare a safe scope for the execution
-        execution_scope = {}
-        exec(byte_code, safe_globals, execution_scope)
-
-        # Check if the required function exists in the scope
-        if function_name not in execution_scope:
-            return {"score": 5, "feedback": f"Error: The required function '{function_name}' was not found in your code. Please check the spelling."}
-
-        user_function = execution_scope[function_name]
-
-        # Loop through each test case and execute the function
-        for i, test in enumerate(test_cases):
-            test_input = test["input"]
-            expected_output = test["output"]
-
-            try:
-                # Use argument unpacking (*) to pass inputs to the function
-                actual_output = user_function(*test_input)
-
-                if actual_output == expected_output:
-                    passed_tests += 1
-                    feedback_details.append(f"✅ Test {i+1}: Input {test_input} -> Passed!")
-                else:
-                    feedback_details.append(f"❌ Test {i+1}: Input {test_input} -> Failed. Expected '{expected_output}', but got '{actual_output}'.")
-            except Exception as e:
-                feedback_details.append(f"💥 Test {i+1}: Input {test_input} -> Error during execution: {e}")
-
+        exec(user_code, {}, execution_scope)
     except Exception as e:
-        return {"score": 0, "feedback": f"A critical error occurred during code compilation or setup: {e}"}
+        error_message = f"Syntax Error or problem in code definition: {e}"
+        for name in test_cases_data:
+            results.append({"name": name, "status": "💥 Error", "details": error_message})
+        return results
 
-    # Calculate final score and compile feedback
-    score = (passed_tests / total_tests) * 100
-    summary = f"Passed {passed_tests} out of {total_tests} test cases."
-    final_feedback = summary + "\n\n" + "\n".join(feedback_details)
+    # Now, loop through the test cases and call the function.
+    for name, data in test_cases_data.items():
+        result_details = {"name": name, "status": ""}
 
-    return {"score": round(score), "feedback": final_feedback}
+        original_stdout = sys.stdout
+        captured_output_stream = StringIO()
+        sys.stdout = captured_output_stream
+
+        try:
+            function_name = data["function_name"]
+            func_to_call = execution_scope.get(function_name)
+
+            # Check if the function was actually defined in the user's code
+            if not func_to_call or not callable(func_to_call):
+                raise NameError(f"Function '{function_name}' not found in the provided code.")
+
+            # Call the function with the provided arguments
+            actual_return = func_to_call(*data["args"])
+
+            # Compare the return value
+            if actual_return == data["expected_return"]:
+                result_details["status"] = "✅ Passed"
+            else:
+                result_details["status"] = "❌ Failed"
+                result_details["details"] = (
+                    f"Expected return: {data['expected_return']} ({type(data['expected_return']).__name__}), "
+                    f"Actual return: {actual_return} ({type(actual_return).__name__})"
+                )
+
+        except Exception as e:
+            # This catches runtime errors when the function is called
+            result_details["status"] = "💥 Error"
+            result_details["details"] = f"An error occurred during execution: {e}"
+        finally:
+            # Always restore stdout and add any printed output to the details
+            printed_output = captured_output_stream.getvalue()
+            if printed_output:
+                details = result_details.get("details", "")
+                result_details["details"] = (details + f"\nPrinted output:\n{printed_output}").strip()
+            sys.stdout = original_stdout
+
+        results.append(result_details)
+
+    # Calculate score and feedback
+    passed = sum(1 for r in results if r["status"] == "✅ Passed")
+    total = len(results)
+    score = int((passed / total) * 100) if total > 0 else 0
+
+    if score == 100:
+        feedback = "Excellent! All test cases passed successfully."
+    elif score >= 60:
+        feedback = "Good job, but some test cases did not pass. Please review the details."
+    else:
+        feedback = "Several test cases failed or there were errors. Please review your code carefully."
+
+    results_details = {"score": score, "feedback": feedback}
+
+    return results_details
+
+
+
+"""if __name__ == "__main__":
+    results = evaluate_code(example_user_code, example_test_cases)
+    for res in results:
+        print(res)"""

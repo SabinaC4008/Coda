@@ -20,7 +20,7 @@ def return_instructions() -> str:
     2.  Analyze and Delegate:
         * Read the exercise_type to determine the correct evaluation path:
             * If exercise_type is multiple_choice or fill_in_the_blank, call the DirectVerificationTool. This tool performs a simple, direct comparison.
-            * If exercise_type is write_code, call the CodeSubAgent. This sub-agent is responsible for complex code analysis.
+            * If exercise_type is write_code, call the coda_sub_agent. This sub-agent is responsible for complex code analysis.
 
     3. Receive the Result:
         * Await the output from the tool or sub-agent you called in the previous step.

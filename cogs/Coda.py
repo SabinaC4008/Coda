@@ -249,3 +249,81 @@ class Coda(commands.Cog):
             color=self.COLOR
         )
         await message.edit(embed=embed)
+
+
+  @commands.command(name="code", aliases=["c"], help="Code the question.")
+  async def code(self, ctx):
+
+        question = "Code a function that returns the sum of two numbers."
+
+        embed = discord.Embed(
+            title="coda Agent: Code the Question!",
+            description=f"**Question:**\n`{question}`\n\nType your code answer in the chat. You have 2 minutes!",
+            color=self.COLOR
+        )
+        message = await ctx.send(embed=embed)
+
+        # esperar rpta
+        while True:
+            def check(message):
+                return message.author == ctx.author and message.channel == ctx.channel
+            try:
+                user_message = await self.CLIENT.wait_for("message", timeout=120.0, check=check)
+                user_answer = user_message.content.strip().lower()
+                break
+
+            except:
+              # TODO: You took too long
+              break
+
+        print(user_answer)
+
+        example_user_code = f"""def add(a, b):
+            print('Adding numbers')
+            return a + b"""
+
+        example_test_cases = {
+            "Test Case 1": {
+                "function_name": "add",
+                "args": (2, 3),
+                "expected_return": 5
+            },
+            "Test Case 2": {
+                "function_name": "add",
+                "args": (-1, 1),
+                "expected_return": 0
+            },
+        }
+
+        # mandar a coda
+        query = f"""
+            exercise_type: 'write_code'
+            user_code: {user_answer}
+            question: {question}
+            test_cases: {example_test_cases}"""
+
+        res = await self.call_agent_async(query=query,
+                                runner=self.runner,
+                                user_id=self.USER_ID,
+                                session_id=self.SESSION_ID)
+        print(res)
+        print(type(res))
+        python_dict = json.loads(res)
+        print("______________")
+        print(python_dict)
+        print(type(python_dict))
+
+        self.cursor.execute(
+          "INSERT INTO questions (user, date, score, language, server) VALUES (?, ?, ?, ?, ?)",
+          (str(ctx.author.display_name), datetime.datetime.now(), python_dict.get('score', 0), 'Python', str(ctx.guild.id))
+        )
+
+        self.conexion.commit()
+
+        embed = discord.Embed(
+            title="Coda Agent Response",
+            description=f"""Score: {python_dict.get('score', 'N/A')}\n
+            Feedback: {python_dict.get('feedback', 'No feedback provided.')}""",
+            color=self.COLOR
+        )
+        await message.edit(embed=embed)
