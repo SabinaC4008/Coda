@@ -6,13 +6,35 @@ from google.adk.runners import Runner
 from google.genai import types
 import json
 import random
+import sqlite3
+import datetime
 
 class Coda(commands.Cog):
   """Commands for studying using AI agents."""
 
+  def __del__(self):
+    self.conexion.close()
+
   def __init__(self, client):
+
+    self.conexion = sqlite3.connect('game.db')
+    self.cursor = self.conexion.cursor()
+
+    self.cursor.execute('''
+        CREATE TABLE IF NOT EXISTS questions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user TEXT NOT NULL,
+            date DATETIME NOT NULL,
+            score INTEGER NOT NULL,
+            language TEXT NOT NULL,
+            server TEXT NOT NULL
+        )
+    ''')
+
+    self.conexion.commit()
+
     self.CLIENT = client
-    self.COLOR = 0xcb1aee
+    self.COLOR = 0xC1FF72
 
     session_service = InMemorySessionService()
 
@@ -138,11 +160,92 @@ class Coda(commands.Cog):
     print(type(res))
     python_dict = json.loads(res)
 
+
+    self.cursor.execute(
+       "INSERT INTO questions (user, date, score, language, server) VALUES (?, ?, ?, ?, ?)",
+       (str(ctx.author.display_name), datetime.datetime.now(), python_dict.get('score', 0), 'Python', str(ctx.guild.id))
+    )
+
+    self.conexion.commit()
+
     embed = discord.Embed(
         title="Coda Agent Response",
         description=f"""Score: {python_dict.get('score', 'N/A')}\n
         Feedback: {python_dict.get('feedback', 'No feedback provided.')}""",
         color=self.COLOR
     )
-
     await message.edit(embed=embed)
+
+  @commands.command(name="leaderboard", aliases=["lead", "l"], help="Show the leaderboard.")
+  async def leaderboard(self, ctx):
+      self.cursor.execute("SELECT user, sum(score) FROM questions GROUP BY user ORDER BY sum(score) DESC LIMIT 10")
+      rows = self.cursor.fetchall()
+
+      embed = discord.Embed(
+          title="Leaderboard",
+          description="Top 10 users:",
+          color=self.COLOR
+      )
+
+      i = 1
+      for fila in rows:
+          embed.add_field(name=f"{i}. {fila[0]}", value=fila[1], inline=False)
+          i += 1
+
+      await ctx.send(embed=embed)
+
+  @commands.command(name="fill", aliases=["f"], help="Answer a fill-in-the-blank question.")
+  async def fill(self, ctx):
+
+        question = "___ is the keyword used to define a function in Python."
+        correct_answer = "def"
+
+        embed = discord.Embed(
+            title="coda Agent: Fill in the Blank!",
+            description=f"**Question:**\n`{question}`\n\nType your one-word answer in the chat. You have 20 seconds!",
+            color=self.COLOR
+        )
+        message = await ctx.send(embed=embed)
+
+        # esperar rpta
+        while True:
+            def check(message):
+                return message.author == ctx.author and message.channel == ctx.channel
+            try:
+                user_message = await self.CLIENT.wait_for("message", timeout=20.0, check=check)
+                user_answer = user_message.content.strip().lower()
+                break
+
+            except:
+              # TODO: You took too long
+              break
+
+        # mandar a coda
+        query = f"""
+            exercise_type: 'fill_in_the_blank'
+            user_answer: {user_answer}
+            correct_answer_data: {correct_answer}"""
+
+        res = await self.call_agent_async(query=query,
+                                runner=self.runner,
+                                user_id=self.USER_ID,
+                                session_id=self.SESSION_ID)
+        print(res)
+        print(type(res))
+        python_dict = json.loads(res)
+
+
+        self.cursor.execute(
+          "INSERT INTO questions (user, date, score, language, server) VALUES (?, ?, ?, ?, ?)",
+          (str(ctx.author.display_name), datetime.datetime.now(), python_dict.get('score', 0), 'Python', str(ctx.guild.id))
+        )
+
+        self.conexion.commit()
+
+        embed = discord.Embed(
+            title="Coda Agent Response",
+            description=f"""Score: {python_dict.get('score', 'N/A')}\n
+            Feedback: {python_dict.get('feedback', 'No feedback provided.')}""",
+            color=self.COLOR
+        )
+        await message.edit(embed=embed)
