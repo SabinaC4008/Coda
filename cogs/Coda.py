@@ -83,20 +83,20 @@ class Coda(commands.Cog):
                         return number * number
 
                         result = square(5)
-                        print(result)""", 
-                        
+                        print(result)""",
+
                         """ if x < 5:
                               print("less than")
                             ___ x < 5:
                               print("greater than")
                             else:
                               print("error")""",
-                        
-                        """when creating an attribute for a python classes, 
+
+                        """when creating an attribute for a python classes,
                         they should all start with"""]
-    answer_choices = [["function", "fun", "def", "func"], 
-    ["elif", "else if", "if else", "or"], 
-    ["classname.", "own.", "Class.", "self."]] 
+    answer_choices = [["function", "fun", "def", "func"],
+    ["elif", "else if", "if else", "or"],
+    ["classname.", "own.", "Class.", "self."]]
     answer_key = ["def", "elif", "self."]
 
     new_question = random.randint(0,2) # this is only a demo set of questions. ideally
@@ -190,6 +190,42 @@ class Coda(commands.Cog):
       i = 1
       for fila in rows:
           embed.add_field(name=f"{i}. {fila[0]}", value=fila[1], inline=False)
+          i += 1
+
+      await ctx.send(embed=embed)
+
+  @commands.command(name="serverleaderboard", aliases=["slead", "sl"], help="Show the server leaderboard.")
+  async def server_leaderboard(self, ctx):
+      self.cursor.execute("SELECT user, sum(score) FROM questions WHERE server = ? GROUP BY user ORDER BY sum(score) DESC LIMIT 10", (ctx.guild.id,))
+      rows = self.cursor.fetchall()
+
+      embed = discord.Embed(
+          title="Server Leaderboard",
+          description="Top 10 users:",
+          color=self.COLOR
+      )
+
+      i = 1
+      for fila in rows:
+          embed.add_field(name=f"{i}. {fila[0]}", value=fila[1], inline=False)
+          i += 1
+
+      await ctx.send(embed=embed)
+
+  @commands.command(name="languageleaderboard", aliases=["llead", "ll"], help="Show the language leaderboard.")
+  async def language_leaderboard(self, ctx):
+      self.cursor.execute("SELECT user, language, sum(score) FROM questions GROUP BY user, language ORDER BY sum(score) DESC LIMIT 10")
+      rows = self.cursor.fetchall()
+
+      embed = discord.Embed(
+          title="Server Leaderboard",
+          description="Top 10 users:",
+          color=self.COLOR
+      )
+
+      i = 1
+      for fila in rows:
+          embed.add_field(name=f"{i}. {fila[0]} - {fila[1]}", value=fila[2], inline=False)
           i += 1
 
       await ctx.send(embed=embed)
@@ -310,6 +346,9 @@ class Coda(commands.Cog):
         print(type(res))
         python_dict = json.loads(res)
         print("______________")
+        print(python_dict)
+        print(type(python_dict))
+        python_dict = python_dict["evaluate_code_response"]
         print(python_dict)
         print(type(python_dict))
 
